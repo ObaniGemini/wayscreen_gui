@@ -44,6 +44,7 @@ def cmd_get(p):
 	return subprocess.Popen(p, shell=True, stdout=subprocess.PIPE).stdout.read().decode(encoding="utf-8")
 
 def cmd_call(p):
+	print(p)
 	subprocess.call(p, shell=True)
 
 
@@ -114,6 +115,8 @@ def update_info():
 	global scr_combo
 
 	screen_info = json.loads(cmd_get("wlr-randr --json"))
+	ddcutil_display = cmd_get("ddcutil detect").split('\n')
+
 
 	screens = {}
 	currents = {}
@@ -122,6 +125,16 @@ def update_info():
 		name = screen['name']
 
 		screens[name] = {}
+
+		display_num = 0
+		for line in ddcutil_display:
+			if line.startswith("Display"):
+				display_num += 1
+			elif line.startswith("   DRM_connector:") and name in line:
+				screens[name]["DCP_ID"] = str(display_num)
+				break
+
+
 		for mode in screen['modes']:
 			res = str(mode['width']) + 'x' + str(mode['height'])
 			rate = str(mode['refresh'])
@@ -178,12 +191,13 @@ def set_res():
 	global rate_combo
 	global sliders
 
-	cmd_call("wlr-randr --output " + scr_combo.node.get() + " --mode " + res_combo.node.get() + "@" + rate_combo.node.get())
+	screen_name = scr_combo.node.get()
+	cmd_call("wlr-randr --output " + screen_name + " --mode " + res_combo.node.get() + "@" + rate_combo.node.get())
 
 	for key in sliders.keys():
 		curr = sliders[key].node.get()
 		if sliders[key].previous != curr:
-			cmd_call("ddcutil setvcp " + sliders[key].code + " " + str(int(curr)))
+			cmd_call("ddcutil --dis=" + screens[screen_name]["DCP_ID"] + " setvcp " + sliders[key].code + " " + str(int(curr)))
 			sliders[key].previous = curr
 
 
