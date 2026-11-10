@@ -38,6 +38,13 @@ class Slider:
 		self.value['text'] = str(int(self.node.get()))
 		
 
+def ddcommand(screen_name = ""):
+	global screens
+	cmd = "ddcutil --enable-dynamic-sleep "
+	if screen_name == "":
+		return cmd
+	return cmd + "--dis=" + screens[screen_name]["DCP_ID"]
+
 
 
 def cmd_get(p):
@@ -83,6 +90,7 @@ def update_scr(_r = None):
 	res_combo.node.set(currents[selected][0])
 	update_res()
 	rate_combo.node.set(currents[selected][1])
+	update_color_options()
 
 
 def update_res(_r = None):
@@ -101,7 +109,6 @@ def update_rate(_r = None):
 
 	if rate_combo.node.get() not in rate_combo.node['values']:
 		rate_combo.node.set(rate_combo.node['values'][0])
-	print(rate_combo.node.get())
 
 
 
@@ -115,7 +122,7 @@ def update_info():
 	global scr_combo
 
 	screen_info = json.loads(cmd_get("wlr-randr --json"))
-	ddcutil_display = cmd_get("ddcutil detect").split('\n')
+	ddcutil_display = cmd_get(ddcommand() + "detect").split('\n')
 
 
 	screens = {}
@@ -154,7 +161,10 @@ def update_info():
 
 sliders = {}
 
-def update_color_options(root):
+def update_color_options():
+	global root
+	global scr_combo
+
 	def get_field(field, names):
 		for name in names:
 			if name in field:
@@ -162,7 +172,14 @@ def update_color_options(root):
 		return ""
 
 	global sliders
-	lines = cmd_get("ddcutil getvcp color").split('\n')
+
+	screen_name = scr_combo.node.get()
+	lines = ""
+	if screen_name == '':	
+		lines = cmd_get(ddcommand() + "getvcp color")
+	else:
+		lines = cmd_get(ddcommand(scr_combo.node.get()) + " getvcp color")
+	lines = lines.split('\n')
 
 	for line in lines:
 		fields = line.split("):")
@@ -181,8 +198,17 @@ def update_color_options(root):
 				elif "max value" in field[0]:
 					maxi = int(field[1])
 
-			sliders[name] = Slider(root, name, maxi, current, code, 20)
+			if name in sliders:
+				sliders[name].node.set(current)
+			else:
+				sliders[name] = Slider(root, name, maxi, current, code, 20)
 
+
+def set_primary():
+	global scr_combo
+
+	screen_name = scr_combo.node.get()
+	cmd_call("xrandr --output " + screen_name + " --primary")
 
 
 def set_res():
@@ -197,10 +223,8 @@ def set_res():
 	for key in sliders.keys():
 		curr = sliders[key].node.get()
 		if sliders[key].previous != curr:
-			cmd_call("ddcutil --dis=" + screens[screen_name]["DCP_ID"] + " setvcp " + sliders[key].code + " " + str(int(curr)))
+			cmd_call(ddcommand(screen_name) + " setvcp " + sliders[key].code + " " + str(int(curr)))
 			sliders[key].previous = curr
-
-
 
 
 
@@ -218,7 +242,8 @@ rate_combo = ComboBox(root, "Refresh Rate", update_rate, 20)
 
 
 apply_btn = tk.Button(root, text="Apply", command=set_res)
-reload_btn = tk.Button(root, text="Refresh", command=update_info)
+primary_btn = tk.Button(root, text="X11 Primary", command=set_primary)
+#reload_btn = tk.Button(root, text="Refresh", command=update_info)
 
 
 
@@ -226,12 +251,13 @@ scr_combo.frame.pack()
 res_combo.frame.pack()
 rate_combo.frame.pack()
 
-update_color_options(root)
+update_color_options()
 for slider in sliders.values():
 	slider.frame.pack()
 
 apply_btn.pack()
-reload_btn.pack()
+primary_btn.pack()
+#reload_btn.pack()
 
 update_info()
 
